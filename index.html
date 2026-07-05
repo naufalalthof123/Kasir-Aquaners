@@ -814,7 +814,7 @@
   <div class="panel" id="panel-laporan">
     <div class="card" style="margin-bottom:18px;">
       <h2><span class="eyebrow">HARIAN</span> Laporan Harian ke Owner</h2>
-      <div style="font-size:12px;color:var(--ink-soft);margin-bottom:14px;">Ganti laporan kertas — pilih tanggal, export, kirim ke owner. Formatnya mengikuti format laporan harian Pemasukan &amp; Pengeluaran.</div>
+      <div style="font-size:12px;color:var(--ink-soft);margin-bottom:14px;">Ganti laporan kertas — pilih tanggal, export jadi gambar, kirim ke owner lewat WA. Formatnya mengikuti format laporan harian Pemasukan &amp; Pengeluaran.</div>
       <div class="filter-row">
         <input type="text" id="daily-report-date" placeholder="YYYY-MM-DD" style="max-width:220px;"/>
         <button class="btn-primary" id="btn-export-daily" style="margin-top:0;width:auto;padding:10px 18px;">Export Laporan Harian</button>
@@ -1501,18 +1501,29 @@
     return `struk-aquaners-${trx.date}-${trx.time.replace(':','')}.png`;
   }
 
-  function sendReceiptImage(trx, phone){
+  function sendReceiptImage(trx, phone, waWindow){
     return new Promise(async (resolve)=>{
       const canvas = await generateReceiptImage();
-      if(!canvas){ resolve(false); return; }
+      if(!canvas){ if(waWindow && !waWindow.closed) waWindow.close(); resolve(false); return; }
       canvas.toBlob((blob)=>{
-        if(!blob){ alert('Gagal bikin gambar struk. Coba lagi.'); resolve(false); return; }
+        if(!blob){
+          alert('Gagal bikin gambar struk. Coba lagi.');
+          if(waWindow && !waWindow.closed) waWindow.close();
+          resolve(false);
+          return;
+        }
         const fileName = receiptFileName(trx);
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url; a.download = fileName; a.click();
         URL.revokeObjectURL(url);
-        openWa(phone);
+
+        const waUrl = `https://wa.me/${normalizePhone(phone)}`;
+        if(waWindow && !waWindow.closed){
+          waWindow.location.href = waUrl;
+        } else {
+          openWa(phone); // fallback siapa tau window sempet gagal dibuka
+        }
         alert('Gambar struk udah kesimpen ke folder Download. Chat WhatsApp ke nomor tujuan udah kebuka — tinggal lampirkan gambarnya lewat ikon klip/galeri (nggak perlu save nomor jadi kontak dulu).');
         resolve(true);
       }, 'image/png');
@@ -1542,8 +1553,9 @@
     `;
     document.getElementById('btn-wa-resend').addEventListener('click', async ()=>{
       const btn2 = document.getElementById('btn-wa-resend');
+      const waWindow = window.open('', '_blank'); // buka duluan pas diklik biar ga keblokir
       btn2.disabled = true; btn2.textContent = 'Menyiapkan ulang...';
-      await sendReceiptImage(trx, phone);
+      await sendReceiptImage(trx, phone, waWindow);
       showWaSentConfirmation(trx, phone);
     });
   }
@@ -1559,9 +1571,13 @@
       const cust = customers.find(c=>c.id===trx.customerId);
       if(cust && cust.phone !== phone){ cust.phone = phone; await saveCustomers(); renderCustomerList(); }
 
+      // buka tab kosong LANGSUNG pas diklik (masih dianggap aksi user asli sama Safari),
+      // baru diarahin ke link WA-nya setelah gambar struk siap
+      const waWindow = window.open('', '_blank');
+
       btn.disabled = true;
       btn.textContent = 'Menyiapkan gambar struk...';
-      await sendReceiptImage(trx, phone);
+      await sendReceiptImage(trx, phone, waWindow);
       showWaSentConfirmation(trx, phone);
     });
   }
@@ -2236,9 +2252,9 @@
     return days[d.getDay()];
   }
 
-  document.getElementById('btn-export-daily').addEventListener('click', ()=>{
-    if(typeof XLSX === 'undefined'){
-      alert('Modul Excel belum siap dimuat. Pastikan ada koneksi internet sebentar, lalu coba lagi.');
+  async function exportDailyReportImage(){
+    if(typeof html2canvas === 'undefined'){
+      alert('Modul gambar belum siap dimuat. Pastikan ada koneksi internet sebentar, lalu coba lagi.');
       return;
     }
     const dateInput = document.getElementById('daily-report-date').value.trim();
@@ -2254,68 +2270,124 @@
     }
 
     const hari = dayNameID(targetDate);
-    const rows = [];
-
-    rows.push(['LAPORAN HARIAN AQUANERS']);
-    rows.push([]);
-    rows.push(['PEMASUKAN']);
-    rows.push(['Hari','Tanggal','Nama Pelanggan','Jml Galon','Jenis Galon','Antar','Jml Pemasukan (Rp)','Tipe Pembayaran']);
-    jual.forEach(t=>{
-      rows.push([
-        hari, targetDate, t.customerName, t.jumlah,
-        t.ukuran==='kecil' ? 'Kecil' : 'Besar',
-        t.antar ? 'Ya' : 'Tidak',
-        t.total,
-        paymentLabel(t.payment)
-      ]);
-    });
     const totalPemasukan = jual.reduce((s,t)=>s+t.total,0);
-    rows.push(['','','','','','','Jumlah Pemasukan', totalPemasukan]);
-    rows.push([]);
-    rows.push(['Tanda tangan operator:', currentKasir || '']);
-    rows.push([]);
-
-    if(asrama.length>0){
-      rows.push(['KONSUMSI ASRAMA (INTERNAL - TIDAK DIHITUNG PEMASUKAN)']);
-      rows.push(['Hari','Tanggal','Asrama','Jml Galon','Jenis Galon']);
-      asrama.forEach(t=>{
-        rows.push([hari, targetDate, t.customerName, t.jumlah, t.ukuran==='kecil' ? 'Kecil' : 'Besar']);
-      });
-      rows.push(['','','','Total Galon Asrama', asrama.reduce((s,t)=>s+t.jumlah,0)]);
-      rows.push([]);
-    }
-
-    rows.push(['PENGELUARAN']);
-    rows.push(['Hari','Tanggal','Jenis Pengeluaran','Jumlah Biaya','Bukti','Keterangan']);
-    dayExpenses.forEach(e=>{
-      rows.push([hari, targetDate, e.kategori, e.jumlahBiaya, e.bukti || '-', e.keterangan || '']);
-    });
     const totalPengeluaran = dayExpenses.reduce((s,e)=>s+e.jumlahBiaya,0);
-    rows.push(['','','','Jumlah Pengeluaran', totalPengeluaran]);
-    rows.push([]);
+    const totalAsramaGalon = asrama.reduce((s,t)=>s+t.jumlah,0);
 
-    rows.push(['SALDO BERSIH (Pemasukan - Pengeluaran)', totalPemasukan - totalPengeluaran]);
+    const pemasukanRows = jual.map(t=>`
+      <tr>
+        <td style="padding:8px;border-bottom:1px solid #e4dfd0;">${escapeHtml(t.customerName)}</td>
+        <td style="padding:8px;border-bottom:1px solid #e4dfd0;text-align:center;">${t.jumlah}</td>
+        <td style="padding:8px;border-bottom:1px solid #e4dfd0;text-align:center;">${t.ukuran==='kecil'?'Kecil':'Besar'}</td>
+        <td style="padding:8px;border-bottom:1px solid #e4dfd0;text-align:center;">${t.antar?'Ya':'Tidak'}</td>
+        <td style="padding:8px;border-bottom:1px solid #e4dfd0;text-align:right;">${fmt(t.total)}</td>
+        <td style="padding:8px;border-bottom:1px solid #e4dfd0;text-align:center;">${paymentLabel(t.payment)}</td>
+      </tr>
+    `).join('');
 
-    const ws = XLSX.utils.aoa_to_sheet(rows);
-    ws['!cols'] = [{wch:16},{wch:12},{wch:20},{wch:12},{wch:12},{wch:10},{wch:18},{wch:14}];
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, `Laporan ${targetDate}`);
+    const pengeluaranRows = dayExpenses.map(e=>`
+      <tr>
+        <td style="padding:8px;border-bottom:1px solid #e4dfd0;">${escapeHtml(e.kategori)}</td>
+        <td style="padding:8px;border-bottom:1px solid #e4dfd0;text-align:right;">${fmt(e.jumlahBiaya)}</td>
+        <td style="padding:8px;border-bottom:1px solid #e4dfd0;text-align:center;">${e.bukti||'-'}</td>
+        <td style="padding:8px;border-bottom:1px solid #e4dfd0;">${escapeHtml(e.keterangan||'-')}</td>
+      </tr>
+    `).join('');
+
+    const asramaSection = asrama.length>0 ? `
+      <div style="margin-top:26px;">
+        <div style="font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:14px;color:#0a2e33;margin-bottom:8px;">KONSUMSI ASRAMA (Internal — Tidak Dihitung Pemasukan)</div>
+        <table style="width:100%;border-collapse:collapse;font-size:12px;background:#fff;">
+          <thead>
+            <tr style="background:#cfe9ec;">
+              <th style="padding:8px;text-align:left;">Asrama</th>
+              <th style="padding:8px;text-align:center;">Jml Galon</th>
+              <th style="padding:8px;text-align:center;">Jenis Galon</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${asrama.map(t=>`
+              <tr>
+                <td style="padding:8px;border-bottom:1px solid #e4dfd0;">${escapeHtml(t.customerName)}</td>
+                <td style="padding:8px;border-bottom:1px solid #e4dfd0;text-align:center;">${t.jumlah}</td>
+                <td style="padding:8px;border-bottom:1px solid #e4dfd0;text-align:center;">${t.ukuran==='kecil'?'Kecil':'Besar'}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+        <div style="text-align:right;font-size:12px;font-weight:600;color:#e2803e;margin-top:6px;">Total Galon Asrama: ${totalAsramaGalon}</div>
+      </div>
+    ` : '';
+
+    const temp = document.createElement('div');
+    temp.innerHTML = `
+      <div id="daily-report-export" style="position:fixed;left:-9999px;top:0;width:900px;background:#faf7f0;font-family:'Inter',sans-serif;padding:36px;box-sizing:border-box;">
+        <div style="text-align:center;margin-bottom:26px;">
+          <div style="font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:22px;color:#0a2e33;">LAPORAN HARIAN AQUANERS</div>
+          <div style="font-size:13px;color:#5c6e6f;margin-top:4px;">${hari}, ${targetDate}</div>
+        </div>
+
+        <div style="font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:14px;color:#0a2e33;margin-bottom:8px;">PEMASUKAN</div>
+        <table style="width:100%;border-collapse:collapse;font-size:12px;background:#fff;">
+          <thead>
+            <tr style="background:#cfe9ec;">
+              <th style="padding:8px;text-align:left;">Nama Pelanggan</th>
+              <th style="padding:8px;text-align:center;">Jml Galon</th>
+              <th style="padding:8px;text-align:center;">Jenis</th>
+              <th style="padding:8px;text-align:center;">Antar</th>
+              <th style="padding:8px;text-align:right;">Jml Pemasukan</th>
+              <th style="padding:8px;text-align:center;">Bayar</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${pemasukanRows || '<tr><td colspan="6" style="padding:14px;text-align:center;color:#5c6e6f;">Tidak ada transaksi jual di tanggal ini</td></tr>'}
+          </tbody>
+        </table>
+        <div style="text-align:right;font-size:14px;font-weight:700;color:#0f5763;margin-top:10px;padding-top:10px;border-top:2px solid #0f5763;">Jumlah Pemasukan: ${fmt(totalPemasukan)}</div>
+
+        ${asramaSection}
+
+        <div style="font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:14px;color:#0a2e33;margin:28px 0 8px;">PENGELUARAN</div>
+        <table style="width:100%;border-collapse:collapse;font-size:12px;background:#fff;">
+          <thead>
+            <tr style="background:#f6ddc4;">
+              <th style="padding:8px;text-align:left;">Jenis Pengeluaran</th>
+              <th style="padding:8px;text-align:right;">Jumlah Biaya</th>
+              <th style="padding:8px;text-align:center;">Bukti</th>
+              <th style="padding:8px;text-align:left;">Keterangan</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${pengeluaranRows || '<tr><td colspan="4" style="padding:14px;text-align:center;color:#5c6e6f;">Tidak ada pengeluaran di tanggal ini</td></tr>'}
+          </tbody>
+        </table>
+        <div style="text-align:right;font-size:14px;font-weight:700;color:#c56423;margin-top:10px;padding-top:10px;border-top:2px solid #c56423;">Jumlah Pengeluaran: ${fmt(totalPengeluaran)}</div>
+
+        <div style="text-align:right;font-size:17px;font-weight:700;color:#0a2e33;margin-top:22px;padding-top:16px;border-top:2px dashed #5c6e6f;">Saldo Bersih: ${fmt(totalPemasukan - totalPengeluaran)}</div>
+
+        <div style="text-align:center;font-size:10px;color:#5c6e6f;margin-top:26px;">Dibuat otomatis oleh sistem kasir Aquaners</div>
+      </div>
+    `;
+    document.body.appendChild(temp);
 
     try{
-      XLSX.writeFile(wb, `aquaners-laporan-harian-${targetDate}.xlsx`);
-    }catch(err){
-      console.error('gagal export laporan harian', err);
-      try{
-        const wbout = XLSX.write(wb, {bookType:'xlsx', type:'array'});
-        const blob = new Blob([wbout], {type:'application/octet-stream'});
+      const node = document.getElementById('daily-report-export');
+      const canvas = await html2canvas(node, {backgroundColor:'#faf7f0', scale:2});
+      canvas.toBlob(blob=>{
+        if(!blob){ alert('Gagal bikin gambar laporan. Coba lagi.'); return; }
         const url = URL.createObjectURL(blob);
-        window.open(url, '_blank');
-        alert('Download otomatis kayaknya diblokir sama app ini. Coba dibuka lewat Safari/Chrome langsung.');
-      }catch(err2){
-        alert('Export gagal. Coba buka file ini langsung lewat Safari atau Chrome.');
-      }
+        const a = document.createElement('a');
+        a.href = url; a.download = `aquaners-laporan-harian-${targetDate}.png`; a.click();
+        URL.revokeObjectURL(url);
+      }, 'image/png');
+    }catch(e){
+      console.error('gagal export laporan harian', e);
+      alert('Gagal bikin gambar laporan. Coba lagi.');
+    }finally{
+      document.body.removeChild(temp);
     }
-  });
+  }
+  document.getElementById('btn-export-daily').addEventListener('click', exportDailyReportImage);
 
   document.getElementById('btn-export').addEventListener('click', ()=>{
     if(transactions.length===0){ alert('Belum ada data untuk diexport.'); return; }
