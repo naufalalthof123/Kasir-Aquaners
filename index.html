@@ -1407,6 +1407,19 @@
       return;
     }
 
+    if(jenisTransaksi!=='asrama'){
+      const pengambilanDipilih = btnAmbil.classList.contains('selected') || btnAntar.classList.contains('selected');
+      const bayarDipilih = btnBayarTunai.classList.contains('selected') || btnBayarQris.classList.contains('selected') || btnBayarTransfer.classList.contains('selected');
+      if(!pengambilanDipilih){
+        alert('Pilih dulu "Ambil sendiri" atau "Diantar" ya — jangan sampai kelewat.');
+        return;
+      }
+      if(!bayarDipilih){
+        alert('Pilih dulu metode pembayarannya ya (Tunai/QRIS/Transfer) — jangan sampai kelewat.');
+        return;
+      }
+    }
+
     if(jenisTransaksi==='asrama'){
       const trx = {
         id: 't'+Date.now()+Math.random().toString(36).slice(2,6),
@@ -2050,6 +2063,7 @@
 
     const jualArr = new Array(dayCount).fill(0);
     const asramaArr = new Array(dayCount).fill(0);
+    const asramaByName = {};
     let omzet = 0, ambilCount = 0, antarCount = 0;
     transactions.forEach(t=>{
       if(t.date.slice(0,7)!==monthKey) return;
@@ -2057,6 +2071,7 @@
       if(day<1 || day>dayCount) return;
       if(t.isAsrama){
         asramaArr[day-1] += t.jumlah;
+        asramaByName[t.customerName] = (asramaByName[t.customerName]||0) + t.jumlah;
       } else {
         jualArr[day-1] += t.jumlah;
         omzet += t.total;
@@ -2065,32 +2080,63 @@
     });
     const totalJual = jualArr.reduce((a,b)=>a+b,0);
     const totalAsrama = asramaArr.reduce((a,b)=>a+b,0);
-    const maxVal = Math.max(...jualArr, ...asramaArr, 1);
 
     const slideWidth = 1280;
-    const chartAreaWidth = slideWidth - 96;
-    const groupWidth = chartAreaWidth / dayCount;
-    const barWidth = Math.max(2, Math.min(13, groupWidth*0.36));
+    const chartAreaWidth = slideWidth - 96 - 30; // dikurangin lebar label sumbu-Y
 
-    const bars = jualArr.map((jv, idx)=>{
-      const av = asramaArr[idx];
-      const hJ = jv>0 ? Math.max(4, Math.round((jv/maxVal)*100)) : 2;
-      const hA = av>0 ? Math.max(4, Math.round((av/maxVal)*100)) : 2;
-      const showLabel = dayCount<=15 || (idx+1)%5===0 || idx===0 || idx===dayCount-1;
-      return `
-        <div style="display:flex;flex-direction:column;align-items:center;justify-content:flex-end;width:${groupWidth}px;height:100%;">
-          <div style="display:flex;align-items:flex-end;gap:2px;height:130px;">
-            <div style="width:${barWidth}px;height:${hJ}%;background:linear-gradient(180deg,#15808f,#0f5763);border-radius:2px 2px 0 0;"></div>
-            <div style="width:${barWidth}px;height:${hA}%;background:linear-gradient(180deg,#e2803e,#c56423);border-radius:2px 2px 0 0;"></div>
+    function buildMiniChart(dataArr, colorTop, colorBottom){
+      const maxVal = Math.max(...dataArr, 1);
+      const groupWidth = chartAreaWidth / dayCount;
+      const barWidth = Math.max(2, Math.min(16, groupWidth*0.5));
+      return dataArr.map((val, idx)=>{
+        const h = val>0 ? Math.max(4, Math.round((val/maxVal)*100)) : 2;
+        const showDayLabel = dayCount<=15 || (idx+1)%5===0 || idx===0 || idx===dayCount-1;
+        return `
+          <div style="display:flex;flex-direction:column;align-items:center;justify-content:flex-end;width:${groupWidth}px;height:100%;">
+            <div style="font-size:9px;color:#5c6e6f;font-family:'IBM Plex Mono',monospace;margin-bottom:3px;min-height:11px;">${val>0?val:''}</div>
+            <div style="width:${barWidth}px;height:${h}%;background:linear-gradient(180deg,${colorTop},${colorBottom});border-radius:2px 2px 0 0;"></div>
+            <div style="font-size:9px;color:#5c6e6f;margin-top:4px;font-family:'IBM Plex Mono',monospace;">${showDayLabel ? (idx+1) : ''}</div>
           </div>
-          <div style="font-size:9px;color:#5c6e6f;margin-top:4px;font-family:'IBM Plex Mono',monospace;">${showLabel ? (idx+1) : ''}</div>
+        `;
+      }).join('');
+    }
+
+    function chartBlock(title, dataArr, colorTop, colorBottom, extraHtml){
+      return `
+        <div style="background:#fff;border-radius:12px;padding:20px 24px;margin-bottom:20px;">
+          <div style="font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:14px;color:#0a2e33;margin-bottom:14px;">${title}</div>
+          <div style="display:flex;">
+            <div style="width:22px;display:flex;align-items:center;justify-content:center;">
+              <div style="transform:rotate(-90deg);white-space:nowrap;font-size:9.5px;color:#5c6e6f;font-weight:600;letter-spacing:0.05em;">GALON</div>
+            </div>
+            <div style="flex:1;">
+              <div style="display:flex;align-items:flex-end;height:150px;">${buildMiniChart(dataArr, colorTop, colorBottom)}</div>
+              <div style="text-align:center;font-size:9.5px;color:#5c6e6f;font-weight:600;letter-spacing:0.05em;margin-top:8px;">TANGGAL</div>
+            </div>
+          </div>
+          ${extraHtml || ''}
         </div>
       `;
-    }).join('');
+    }
+
+    const asramaNames = Object.keys(asramaByName).sort((a,b)=>a.localeCompare(b, undefined, {numeric:true}));
+    const asramaBreakdownHtml = asramaNames.length>0 ? `
+      <div style="margin-top:18px;padding-top:16px;border-top:1px dashed #e4dfd0;">
+        <div style="font-size:11px;color:#5c6e6f;font-weight:600;text-transform:uppercase;margin-bottom:10px;">Total per Asrama Bulan Ini</div>
+        <div style="display:flex;flex-wrap:wrap;gap:10px;">
+          ${asramaNames.map(name=>`
+            <div style="flex:1 1 30%;min-width:180px;background:#faf7f0;border-radius:8px;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;">
+              <span style="font-size:12.5px;color:#0a2e33;">${escapeHtml(name)}</span>
+              <span style="font-family:'IBM Plex Mono',monospace;font-weight:700;color:#e2803e;font-size:13px;">${asramaByName[name]} galon</span>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    ` : '';
 
     const temp = document.createElement('div');
     temp.innerHTML = `
-      <div id="slide-export" style="position:fixed;left:-9999px;top:0;width:${slideWidth}px;height:720px;background:#faf7f0;font-family:'Inter',sans-serif;padding:40px;box-sizing:border-box;">
+      <div id="slide-export" style="position:fixed;left:-9999px;top:0;width:${slideWidth}px;background:#faf7f0;font-family:'Inter',sans-serif;padding:40px;box-sizing:border-box;">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:24px;">
           <div>
             <div style="font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:28px;color:#0a2e33;">AQUANERS</div>
@@ -2118,13 +2164,8 @@
           </div>
         </div>
 
-        <div style="background:#fff;border-radius:12px;padding:20px 24px;">
-          <div style="display:flex;gap:16px;margin-bottom:14px;">
-            <span style="font-size:12px;color:#5c6e6f;display:flex;align-items:center;gap:6px;"><span style="width:9px;height:9px;border-radius:50%;background:#15808f;display:inline-block;"></span>Jual (pelanggan)</span>
-            <span style="font-size:12px;color:#5c6e6f;display:flex;align-items:center;gap:6px;"><span style="width:9px;height:9px;border-radius:50%;background:#e2803e;display:inline-block;"></span>Asrama (internal)</span>
-          </div>
-          <div style="display:flex;align-items:flex-end;height:150px;">${bars}</div>
-        </div>
+        ${chartBlock('Galon Terjual per Hari (Pelanggan)', jualArr, '#15808f', '#0f5763')}
+        ${chartBlock('Galon ke Asrama per Hari', asramaArr, '#e2803e', '#c56423', asramaBreakdownHtml)}
       </div>
     `;
     document.body.appendChild(temp);
