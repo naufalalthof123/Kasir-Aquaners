@@ -472,6 +472,7 @@
     margin-bottom:14px;
   }
   .stat-row.three-col{grid-template-columns:repeat(3,1fr);}
+  .stat-row.two-col{grid-template-columns:repeat(2,1fr);}
   @media (max-width:700px){.stat-row{grid-template-columns:1fr 1fr;}}
   .stat-card{
     background:var(--paper);
@@ -685,10 +686,22 @@
         </div>
 
         <label id="label-nama">Pelanggan</label>
-        <div style="position:relative;">
+        <div style="position:relative;" id="nama-wrapper">
           <input type="text" id="f-nama" placeholder="Nama pelanggan (atau ketik baru)" autocomplete="off"/>
           <div id="nama-suggestions" class="suggest-box"></div>
         </div>
+        <select id="f-asrama-select" style="display:none;">
+          <option value="">Pilih asrama</option>
+          <option value="AS 2">AS 2</option>
+          <option value="AS 6">AS 6</option>
+          <option value="AS HSLC">AS HSLC</option>
+          <option value="AS NLC">AS NLC</option>
+          <option value="AS SKA">AS SKA</option>
+          <option value="AS 12">AS 12</option>
+          <option value="AS 30">AS 30</option>
+          <option value="HAMID">HAMID</option>
+          <option value="AS 3">AS 3</option>
+        </select>
 
         <div class="row">
           <div>
@@ -784,7 +797,7 @@
         <label>Jumlah biaya (Rp)</label>
         <input type="number" id="f-exp-jumlah" min="0" placeholder="0"/>
 
-        <label>Bukti pengeluaran <span style="font-weight:400;color:var(--ink-soft);">(opsional)</span></label>
+        <label>Bukti pengeluaran</label>
         <div class="toggle-group">
           <button type="button" class="toggle-btn" data-val="Bon" id="btn-bukti-bon">Bon</button>
           <button type="button" class="toggle-btn" data-val="Kwitansi" id="btn-bukti-kwitansi">Kwitansi</button>
@@ -814,15 +827,14 @@
   <div class="panel" id="panel-laporan">
     <div class="card" style="margin-bottom:18px;">
       <h2><span class="eyebrow">HARIAN</span> Laporan Harian ke Owner</h2>
-      <div style="font-size:12px;color:var(--ink-soft);margin-bottom:14px;">Ganti laporan kertas — pilih tanggal, export jadi gambar, kirim ke owner lewat WA. Formatnya mengikuti format laporan harian Pemasukan &amp; Pengeluaran.</div>
       <div class="filter-row">
-        <input type="text" id="daily-report-date" placeholder="YYYY-MM-DD" style="max-width:220px;"/>
+        <input type="date" id="daily-report-date" style="max-width:220px;"/>
         <button class="btn-primary" id="btn-export-daily" style="margin-top:0;width:auto;padding:10px 18px;">Export Laporan Harian</button>
       </div>
     </div>
 
-    <div class="section-tag">Hari ini &amp; bulan ini</div>
-    <div class="stat-row">
+    <div class="section-tag">Hari ini</div>
+    <div class="stat-row two-col">
       <div class="stat-card">
         <div class="lbl">Omzet hari ini</div>
         <div class="val" id="stat-today">Rp 0</div>
@@ -831,29 +843,25 @@
         <div class="lbl">Galon terjual hari ini</div>
         <div class="val" id="stat-today-galon">0</div>
       </div>
+    </div>
+
+    <div class="section-tag">Bulan ini</div>
+    <div class="stat-row">
       <div class="stat-card">
         <div class="lbl">Omzet bulan ini</div>
         <div class="val" id="stat-month">Rp 0</div>
       </div>
       <div class="stat-card">
-        <div class="lbl">Galon ke asrama bulan ini</div>
-        <div class="val" id="stat-month-asrama">0 galon</div>
-      </div>
-    </div>
-
-    <div class="section-tag">Total galon keluar (sepanjang waktu)</div>
-    <div class="stat-row three-col">
-      <div class="stat-card">
-        <div class="lbl">Total semua galon keluar</div>
-        <div class="val" id="stat-total-all">0</div>
-      </div>
-      <div class="stat-card">
-        <div class="lbl">Total terjual (pelanggan)</div>
+        <div class="lbl">Galon terjual bulan ini</div>
         <div class="val" id="stat-total-jual">0</div>
       </div>
       <div class="stat-card">
-        <div class="lbl">Total ke asrama</div>
-        <div class="val" id="stat-total-asrama">0</div>
+        <div class="lbl">Galon ke asrama bulan ini</div>
+        <div class="val" id="stat-month-asrama">0 galon</div>
+      </div>
+      <div class="stat-card">
+        <div class="lbl">Total semua galon keluar bulan ini</div>
+        <div class="val" id="stat-total-all">0</div>
       </div>
     </div>
 
@@ -873,6 +881,7 @@
       <h2 style="margin-bottom:12px;"><span class="eyebrow">PILIH</span> Bulan buat Grafik Harian</h2>
       <select id="chart-month-select"></select>
       <button class="btn-secondary" id="btn-export-slide" style="width:100%;margin-top:12px;">Export Slide Ringkasan (buat presentasi)</button>
+      <button class="btn-secondary" id="btn-export-asrama-matrix" style="width:100%;margin-top:8px;">Export Rincian Asrama Harian (Excel)</button>
     </div>
 
     <div class="card" style="margin-bottom:18px;" id="card-chart-jual">
@@ -1224,6 +1233,7 @@
         lsSet('time_override', '');
       }
       updateClock();
+      document.getElementById('daily-report-date').value = todayStr();
       renderAll();
     }catch(err){
       console.error('gagal simpan waktu', err);
@@ -1293,7 +1303,8 @@
     btnJenisAsrama.classList.toggle('selected', mode==='asrama');
     pelangganOnlyFields.style.display = mode==='asrama' ? 'none' : 'block';
     labelNama.textContent = mode==='asrama' ? 'Asrama' : 'Pelanggan';
-    elNama.placeholder = mode==='asrama' ? 'misal: Asrama 2' : 'Nama pelanggan (atau ketik baru)';
+    document.getElementById('nama-wrapper').style.display = mode==='asrama' ? 'none' : 'block';
+    document.getElementById('f-asrama-select').style.display = mode==='asrama' ? 'block' : 'none';
     calcTotal();
   }
   function clearJenisSelection(){
@@ -1303,7 +1314,8 @@
     btnJenisAsrama.classList.remove('selected');
     pelangganOnlyFields.style.display = 'block';
     labelNama.textContent = 'Pelanggan';
-    elNama.placeholder = 'Nama pelanggan (atau ketik baru)';
+    document.getElementById('nama-wrapper').style.display = 'block';
+    document.getElementById('f-asrama-select').style.display = 'none';
     calcTotal();
   }
   btnJenisPelanggan.addEventListener('click', ()=>{
@@ -1396,14 +1408,14 @@
   }
 
   document.getElementById('btn-simpan').addEventListener('click', async ()=>{
-    const namaInput = elNama.value.trim();
+    const namaInput = jenisTransaksi==='asrama' ? document.getElementById('f-asrama-select').value : elNama.value.trim();
     const jumlah = Math.max(1, parseInt(elJumlah.value)||1);
     const ukuran = elUkuran.value;
     const catatan = document.getElementById('f-catatan').value.trim();
     const kasir = currentKasir || 'Tidak diketahui';
 
     if(!namaInput){
-      alert(jenisTransaksi==='asrama' ? 'Isi nama asrama dulu ya (misal: Asrama 2).' : 'Isi nama pelanggan dulu ya (boleh nama singkat / "Umum" kalau pembeli lewat).');
+      alert(jenisTransaksi==='asrama' ? 'Pilih asrama dulu ya dari daftar.' : 'Isi nama pelanggan dulu ya (boleh nama singkat / "Umum" kalau pembeli lewat).');
       return;
     }
 
@@ -1441,6 +1453,7 @@
       populateAsramaDatalist();
 
       elNama.value='';
+      document.getElementById('f-asrama-select').value='';
       elJumlah.value=1;
       document.getElementById('f-catatan').value='';
       calcTotal();
@@ -1893,6 +1906,10 @@
       alert('Isi jumlah biayanya dulu ya.');
       return;
     }
+    if(!buktiPengeluaran){
+      alert('Pilih dulu bukti pengeluarannya ya (Bon/Kwitansi/Nota) — jangan sampai kelewat.');
+      return;
+    }
 
     const exp = {
       id: 'e'+Date.now()+Math.random().toString(36).slice(2,6),
@@ -2102,9 +2119,14 @@
     }
 
     function chartBlock(title, dataArr, colorTop, colorBottom, extraHtml){
+      const totalVal = dataArr.reduce((a,b)=>a+b,0);
+      const rataRata = Math.round((totalVal/dayCount)*10)/10;
       return `
         <div style="background:#fff;border-radius:12px;padding:20px 24px;margin-bottom:20px;">
-          <div style="font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:14px;color:#0a2e33;margin-bottom:14px;">${title}</div>
+          <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:14px;">
+            <div style="font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:14px;color:#0a2e33;">${title}</div>
+            <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#5c6e6f;">Rata-rata: <span style="font-weight:700;color:${colorTop};">${rataRata}</span> galon/hari</div>
+          </div>
           <div style="display:flex;">
             <div style="width:22px;display:flex;align-items:center;justify-content:center;">
               <div style="transform:rotate(-90deg);white-space:nowrap;font-size:9.5px;color:#5c6e6f;font-weight:600;letter-spacing:0.05em;">GALON</div>
@@ -2147,10 +2169,6 @@
 
         <div style="display:flex;gap:16px;margin-bottom:28px;">
           <div style="flex:1;background:#fff;border-radius:12px;padding:16px 18px;">
-            <div style="font-size:11px;color:#5c6e6f;font-weight:600;text-transform:uppercase;">Omzet Bulan Ini</div>
-            <div style="font-family:'IBM Plex Mono',monospace;font-size:24px;font-weight:600;color:#0f5763;margin-top:6px;">${fmt(omzet)}</div>
-          </div>
-          <div style="flex:1;background:#fff;border-radius:12px;padding:16px 18px;">
             <div style="font-size:11px;color:#5c6e6f;font-weight:600;text-transform:uppercase;">Galon Terjual</div>
             <div style="font-family:'IBM Plex Mono',monospace;font-size:24px;font-weight:600;color:#0f5763;margin-top:6px;">${totalJual}</div>
           </div>
@@ -2188,6 +2206,78 @@
     }
   }
   document.getElementById('btn-export-slide').addEventListener('click', exportMonthSlide);
+
+  function exportAsramaMatrix(){
+    if(typeof XLSX === 'undefined'){
+      alert('Modul Excel belum siap dimuat. Pastikan ada koneksi internet sebentar, lalu coba lagi.');
+      return;
+    }
+    const sel = document.getElementById('chart-month-select');
+    const monthKey = sel.value || todayStr().slice(0,7);
+    const [y,m] = monthKey.split('-').map(Number);
+    const dayCount = getDaysInMonth(y,m);
+    const monthName = MONTH_FULL_NAMES[m-1] + ' ' + y;
+
+    const asramaTrx = transactions.filter(t=>t.isAsrama && t.date.slice(0,7)===monthKey);
+    if(asramaTrx.length===0){
+      alert('Belum ada data asrama di bulan itu.');
+      return;
+    }
+    const names = [...new Set(asramaTrx.map(t=>t.customerName))].sort((a,b)=>a.localeCompare(b, undefined, {numeric:true}));
+
+    // matrix[hari][nama] = jumlah galon
+    const matrix = {};
+    for(let d=1; d<=dayCount; d++){
+      matrix[d] = {};
+      names.forEach(n=>{ matrix[d][n] = 0; });
+    }
+    asramaTrx.forEach(t=>{
+      const day = parseInt(t.date.slice(8,10),10);
+      if(day>=1 && day<=dayCount){ matrix[day][t.customerName] += t.jumlah; }
+    });
+
+    const rows = [];
+    rows.push(['TANGGAL', ...names]);
+    for(let d=1; d<=dayCount; d++){
+      rows.push([d, ...names.map(n => matrix[d][n] || '')]);
+    }
+
+    const rataRow = ['RATA-RATA'];
+    const jumlahRow = ['JUMLAH'];
+    names.forEach(n=>{
+      let total = 0, activeDays = 0;
+      for(let d=1; d<=dayCount; d++){
+        const v = matrix[d][n];
+        if(v>0){ total += v; activeDays++; }
+      }
+      jumlahRow.push(total);
+      rataRow.push(activeDays>0 ? Math.round((total/activeDays)*10)/10 : 0);
+    });
+    rows.push(rataRow);
+    rows.push(jumlahRow);
+
+    const ws = XLSX.utils.aoa_to_sheet(rows);
+    ws['!cols'] = [{wch:10}, ...names.map(()=>({wch:10}))];
+    const wb = XLSX.utils.book_new();
+    const sheetName = `Asrama ${monthName}`.slice(0,31);
+    XLSX.utils.book_append_sheet(wb, ws, sheetName);
+
+    try{
+      XLSX.writeFile(wb, `aquaners-rincian-asrama-${monthKey}.xlsx`);
+    }catch(err){
+      console.error('gagal export rincian asrama', err);
+      try{
+        const wbout = XLSX.write(wb, {bookType:'xlsx', type:'array'});
+        const blob = new Blob([wbout], {type:'application/octet-stream'});
+        const url = URL.createObjectURL(blob);
+        window.open(url, '_blank');
+        alert('Download otomatis kayaknya diblokir sama app ini. Coba dibuka lewat Safari/Chrome langsung.');
+      }catch(err2){
+        alert('Export gagal. Coba buka file ini langsung lewat Safari atau Chrome.');
+      }
+    }
+  }
+  document.getElementById('btn-export-asrama-matrix').addEventListener('click', exportAsramaMatrix);
 
   function renderDeliveryBreakdown(){
     const tbody = document.getElementById('delivery-table');
@@ -2244,9 +2334,8 @@
     document.getElementById('stat-month').textContent = fmt(monthTrx.reduce((s,t)=>s+t.total,0));
     document.getElementById('stat-month-asrama').textContent = monthTrx.filter(t=>t.isAsrama).reduce((s,t)=>s+t.jumlah,0) + ' galon';
 
-    document.getElementById('stat-total-all').textContent = transactions.reduce((s,t)=>s+t.jumlah,0) + ' galon';
-    document.getElementById('stat-total-jual').textContent = transactions.filter(t=>!t.isAsrama).reduce((s,t)=>s+t.jumlah,0) + ' galon';
-    document.getElementById('stat-total-asrama').textContent = transactions.filter(t=>t.isAsrama).reduce((s,t)=>s+t.jumlah,0) + ' galon';
+    document.getElementById('stat-total-all').textContent = monthTrx.reduce((s,t)=>s+t.jumlah,0) + ' galon';
+    document.getElementById('stat-total-jual').textContent = monthTrx.filter(t=>!t.isAsrama).reduce((s,t)=>s+t.jumlah,0);
 
     renderDeliveryBreakdown();
     renderChart();
@@ -2318,6 +2407,7 @@
     const pemasukanRows = jual.map(t=>`
       <tr>
         <td style="padding:8px;border-bottom:1px solid #e4dfd0;">${escapeHtml(t.customerName)}</td>
+        <td style="padding:8px;border-bottom:1px solid #e4dfd0;text-align:center;">${t.time}</td>
         <td style="padding:8px;border-bottom:1px solid #e4dfd0;text-align:center;">${t.jumlah}</td>
         <td style="padding:8px;border-bottom:1px solid #e4dfd0;text-align:center;">${t.ukuran==='kecil'?'Kecil':'Besar'}</td>
         <td style="padding:8px;border-bottom:1px solid #e4dfd0;text-align:center;">${t.antar?'Ya':'Tidak'}</td>
@@ -2342,6 +2432,7 @@
           <thead>
             <tr style="background:#cfe9ec;">
               <th style="padding:8px;text-align:left;">Asrama</th>
+              <th style="padding:8px;text-align:center;">Jam</th>
               <th style="padding:8px;text-align:center;">Jml Galon</th>
               <th style="padding:8px;text-align:center;">Jenis Galon</th>
             </tr>
@@ -2350,6 +2441,7 @@
             ${asrama.map(t=>`
               <tr>
                 <td style="padding:8px;border-bottom:1px solid #e4dfd0;">${escapeHtml(t.customerName)}</td>
+                <td style="padding:8px;border-bottom:1px solid #e4dfd0;text-align:center;">${t.time}</td>
                 <td style="padding:8px;border-bottom:1px solid #e4dfd0;text-align:center;">${t.jumlah}</td>
                 <td style="padding:8px;border-bottom:1px solid #e4dfd0;text-align:center;">${t.ukuran==='kecil'?'Kecil':'Besar'}</td>
               </tr>
@@ -2373,6 +2465,7 @@
           <thead>
             <tr style="background:#cfe9ec;">
               <th style="padding:8px;text-align:left;">Nama Pelanggan</th>
+              <th style="padding:8px;text-align:center;">Jam</th>
               <th style="padding:8px;text-align:center;">Jml Galon</th>
               <th style="padding:8px;text-align:center;">Jenis</th>
               <th style="padding:8px;text-align:center;">Antar</th>
@@ -2381,7 +2474,7 @@
             </tr>
           </thead>
           <tbody>
-            ${pemasukanRows || '<tr><td colspan="6" style="padding:14px;text-align:center;color:#5c6e6f;">Tidak ada transaksi jual di tanggal ini</td></tr>'}
+            ${pemasukanRows || '<tr><td colspan="7" style="padding:14px;text-align:center;color:#5c6e6f;">Tidak ada transaksi jual di tanggal ini</td></tr>'}
           </tbody>
         </table>
         <div style="text-align:right;font-size:14px;font-weight:700;color:#0f5763;margin-top:10px;padding-top:10px;border-top:2px solid #0f5763;">Jumlah Pemasukan: ${fmt(totalPemasukan)}</div>
@@ -2451,20 +2544,24 @@
       const ambil = jual.filter(t=>!t.antar);
       const antar = jual.filter(t=>t.antar);
       const asrama = list.filter(t=>t.isAsrama);
+      const [ky, km] = key.split('-').map(Number);
+      const daysInThisMonth = getDaysInMonth(ky, km);
       return {
         'Bulan': monthLabel(key),
         'Jumlah Transaksi Jual': jual.length,
         'Galon Terjual': sum(jual,'jumlah'),
+        'Rata-rata Galon Terjual/Hari': Math.round((sum(jual,'jumlah')/daysInThisMonth)*10)/10,
         'Omzet': sum(jual,'total'),
         'Ambil Sendiri (transaksi)': ambil.length,
         'Ambil Sendiri (galon)': sum(ambil,'jumlah'),
         'Diantar (transaksi)': antar.length,
         'Diantar (galon)': sum(antar,'jumlah'),
         'Transaksi Asrama': asrama.length,
-        'Galon ke Asrama': sum(asrama,'jumlah')
+        'Galon ke Asrama': sum(asrama,'jumlah'),
+        'Rata-rata Galon Asrama/Hari': Math.round((sum(asrama,'jumlah')/daysInThisMonth)*10)/10
       };
     });
-    // baris total keseluruhan di paling bawah
+    // baris total keseluruhan di paling bawah (rata-rata dikosongin krn beda skala waktu per bulan)
     const jualAll = transactions.filter(t=>!t.isAsrama);
     const ambilAll = jualAll.filter(t=>!t.antar);
     const antarAll = jualAll.filter(t=>t.antar);
@@ -2473,17 +2570,19 @@
       'Bulan': 'TOTAL KESELURUHAN',
       'Jumlah Transaksi Jual': jualAll.length,
       'Galon Terjual': sum(jualAll,'jumlah'),
+      'Rata-rata Galon Terjual/Hari': '',
       'Omzet': sum(jualAll,'total'),
       'Ambil Sendiri (transaksi)': ambilAll.length,
       'Ambil Sendiri (galon)': sum(ambilAll,'jumlah'),
       'Diantar (transaksi)': antarAll.length,
       'Diantar (galon)': sum(antarAll,'jumlah'),
       'Transaksi Asrama': asramaAll.length,
-      'Galon ke Asrama': sum(asramaAll,'jumlah')
+      'Galon ke Asrama': sum(asramaAll,'jumlah'),
+      'Rata-rata Galon Asrama/Hari': ''
     });
     const wsRekap = XLSX.utils.json_to_sheet(rekapBulanan);
     wsRekap['!cols'] = [
-      {wch:20},{wch:18},{wch:14},{wch:14},{wch:20},{wch:18},{wch:16},{wch:14},{wch:16},{wch:14}
+      {wch:20},{wch:18},{wch:14},{wch:20},{wch:14},{wch:20},{wch:18},{wch:16},{wch:14},{wch:16},{wch:14},{wch:20}
     ];
 
     // Sheet 2: Rekap per Kasir per Bulan — buat bantu gajian
