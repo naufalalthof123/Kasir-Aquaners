@@ -123,7 +123,7 @@
   /* GRID LAYOUT for kasir */
   .grid-2{
     display:grid;
-    grid-template-columns:1fr 380px;
+    grid-template-columns:1fr 440px;
     gap:18px;
     align-items:start;
   }
@@ -313,37 +313,43 @@
     padding:20px 20px 18px;
     font-family:'IBM Plex Mono',monospace;
     position:relative;
+    overflow-x:auto;
   }
-  #receipt-printable{
+  .receipt-printable{
     background:#fff;
-    padding:28px 26px 24px;
-    max-width:380px;
+    width:4in;
+    min-height:6in;
+    padding:0.45in 0.4in;
+    box-sizing:border-box;
     margin:0 auto;
+    display:flex;
+    flex-direction:column;
+    justify-content:center;
   }
   .receipt-head{
     text-align:center;
-    padding-bottom:16px;
+    padding-bottom:22px;
     border-bottom:1px dashed var(--paper-line);
   }
   .receipt-head .name{
     font-family:'Space Grotesk',sans-serif;
     font-weight:700;
-    font-size:16px;
+    font-size:19px;
     color:var(--teal-950);
     letter-spacing:0.02em;
   }
   .receipt-head .sub{
-    font-size:10.5px;
+    font-size:11.5px;
     color:var(--ink-soft);
-    margin-top:2px;
-    line-height:1.5;
+    margin-top:4px;
+    line-height:1.6;
   }
-  .receipt-body{padding-top:16px;}
+  .receipt-body{padding-top:22px;}
   .receipt-row{
     display:flex;
     justify-content:space-between;
-    font-size:12.5px;
-    margin-bottom:10px;
+    font-size:13.5px;
+    margin-bottom:15px;
     color:var(--ink);
     gap:14px;
   }
@@ -352,18 +358,18 @@
   .receipt-total{
     display:flex;
     justify-content:space-between;
-    margin-top:14px;
-    padding-top:14px;
+    margin-top:20px;
+    padding-top:20px;
     border-top:1px dashed var(--paper-line);
-    font-size:15px;
+    font-size:17px;
     font-weight:600;
     color:var(--teal-800);
   }
   .receipt-foot{
-    margin-top:14px;
-    padding-top:12px;
+    margin-top:20px;
+    padding-top:16px;
     border-top:1px dashed var(--paper-line);
-    font-size:10.5px;
+    font-size:11px;
     color:var(--ink-soft);
     text-align:center;
   }
@@ -408,6 +414,11 @@
     font-size:11px; margin-left:10px; opacity:0.6;
   }
   .trx-item .del:hover{opacity:1;}
+  .trx-item .print-btn{
+    background:none; border:none; color:var(--wa); cursor:pointer;
+    font-size:11px; margin-left:10px; opacity:0.75; white-space:nowrap;
+  }
+  .trx-item .print-btn:hover{opacity:1;}
   .badge-antar{
     display:inline-block;
     background:var(--orange-soft);
@@ -1044,6 +1055,18 @@
   </div>
 </div>
 
+<!-- Modal: kirim ulang struk dari list transaksi hari ini -->
+<div class="modal-backdrop" id="modal-list-wa">
+  <div class="modal">
+    <button class="close-x" id="modal-list-wa-close">✕</button>
+    <h3>Kirim Struk</h3>
+    <div style="font-size:12px;color:var(--ink-soft);margin-bottom:14px;" id="list-wa-info"></div>
+    <label style="margin-top:0;">No. WhatsApp tujuan</label>
+    <input type="text" inputmode="numeric" autocomplete="off" id="list-wa-phone" placeholder="misal 08123456789"/>
+    <button class="btn-wa" id="btn-list-wa-send" style="width:100%;margin-top:14px;">Kirim Struk (Foto) ke WA</button>
+  </div>
+</div>
+
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script>
@@ -1536,19 +1559,51 @@
     window.open(`https://wa.me/${normalizePhone(phone)}`, '_blank');
   }
 
-  async function generateReceiptImage(){
+  function buildReceiptInnerHtml(trx){
+    const hargaSatuan = getHarga(trx.ukuran, trx.antar ? 'antar' : 'ambil');
+    const ukuranLabel = trx.ukuran === 'kecil' ? 'Kecil' : 'Besar';
+    const totalLine = trx.isAsrama
+      ? `<div class="receipt-total"><span>Status</span><span>INTERNAL · ASRAMA</span></div>`
+      : `<div class="receipt-total"><span>Total</span><span>${fmt(trx.total)}</span></div>`;
+    return `
+      <div class="receipt-head">
+        <div class="name">${BIZ_NAME}</div>
+        <div class="sub">${trx.isAsrama ? 'Konsumsi Internal · Asrama' : 'Refill Mineral Water · ' + BIZ_ADDRESS}</div>
+      </div>
+      <div class="receipt-body">
+        <div class="receipt-row"><span class="k">Tanggal</span><span>${trx.date} · ${trx.time}</span></div>
+        <div class="receipt-row"><span class="k">${trx.isAsrama ? 'Asrama' : 'Pelanggan'}</span><span>${escapeHtml(trx.customerName)}</span></div>
+        <div class="receipt-row"><span class="k">Galon (${ukuranLabel})</span><span>${trx.isAsrama ? trx.jumlah : trx.jumlah + ' x ' + fmt(hargaSatuan)}</span></div>
+        ${!trx.isAsrama ? `<div class="receipt-row"><span class="k">Pengambilan</span><span>${trx.antar ? 'Diantar' : 'Ambil sendiri'}</span></div>` : ''}
+        ${(!trx.isAsrama && trx.address) ? `<div class="receipt-row"><span class="k">Alamat</span><span>${escapeHtml(trx.address)}</span></div>` : ''}
+        ${!trx.isAsrama ? `<div class="receipt-row"><span class="k">Bayar</span><span>${paymentLabel(trx.payment)}</span></div>` : ''}
+        ${trx.catatan ? `<div class="receipt-row"><span class="k">Catatan</span><span>${escapeHtml(trx.catatan)}</span></div>` : ''}
+        ${totalLine}
+      </div>
+      <div class="receipt-foot">Dicatat oleh ${escapeHtml(trx.kasir || '-')}</div>
+    `;
+  }
+
+  async function generateReceiptImage(trx){
     if(typeof html2canvas === 'undefined'){
       alert('Modul gambar belum siap dimuat. Pastikan ada koneksi internet sebentar, lalu coba lagi.');
       return null;
     }
-    const node = document.getElementById('receipt-printable');
-    if(!node) return null;
+    // selalu bikin node baru di luar layar, biar bisa generate struk transaksi manapun
+    // (bukan cuma yang lagi ditampilin di panel), termasuk buat "Kirim ulang" dari riwayat
+    const temp = document.createElement('div');
+    temp.innerHTML = `<div class="receipt-printable" style="position:fixed;left:-9999px;top:0;">${buildReceiptInnerHtml(trx)}</div>`;
+    document.body.appendChild(temp);
     try{
-      return await html2canvas(node, {backgroundColor:'#ffffff', scale:2});
+      const node = temp.firstElementChild;
+      const canvas = await html2canvas(node, {backgroundColor:'#ffffff', scale:3});
+      return canvas;
     }catch(e){
       console.error('gagal bikin gambar struk', e);
       alert('Gagal bikin gambar struk. Coba lagi.');
       return null;
+    }finally{
+      document.body.removeChild(temp);
     }
   }
 
@@ -1558,7 +1613,7 @@
 
   function sendReceiptImage(trx, phone, waWindow){
     return new Promise(async (resolve)=>{
-      const canvas = await generateReceiptImage();
+      const canvas = await generateReceiptImage(trx);
       if(!canvas){ if(waWindow && !waWindow.closed) waWindow.close(); resolve(false); return; }
       canvas.toBlob((blob)=>{
         if(!blob){
@@ -1639,29 +1694,8 @@
 
   function renderReceipt(trx){
     const box = document.getElementById('receipt-box');
-    const hargaSatuan = getHarga(trx.ukuran, trx.antar ? 'antar' : 'ambil');
-    const ukuranLabel = trx.ukuran === 'kecil' ? 'Kecil' : 'Besar';
-    const totalLine = trx.isAsrama
-      ? `<div class="receipt-total"><span>Status</span><span>INTERNAL · ASRAMA</span></div>`
-      : `<div class="receipt-total"><span>Total</span><span>${fmt(trx.total)}</span></div>`;
     box.innerHTML = `
-      <div id="receipt-printable">
-        <div class="receipt-head">
-          <div class="name">${BIZ_NAME}</div>
-          <div class="sub">${trx.isAsrama ? 'Konsumsi Internal · Asrama' : 'Refill Mineral Water · ' + BIZ_ADDRESS}</div>
-        </div>
-        <div class="receipt-body">
-          <div class="receipt-row"><span class="k">Tanggal</span><span>${trx.date} · ${trx.time}</span></div>
-          <div class="receipt-row"><span class="k">${trx.isAsrama ? 'Asrama' : 'Pelanggan'}</span><span>${escapeHtml(trx.customerName)}</span></div>
-          <div class="receipt-row"><span class="k">Galon (${ukuranLabel})</span><span>${trx.isAsrama ? trx.jumlah : trx.jumlah + ' x ' + fmt(hargaSatuan)}</span></div>
-          ${!trx.isAsrama ? `<div class="receipt-row"><span class="k">Pengambilan</span><span>${trx.antar ? 'Diantar' : 'Ambil sendiri'}</span></div>` : ''}
-          ${(!trx.isAsrama && trx.address) ? `<div class="receipt-row"><span class="k">Alamat</span><span>${escapeHtml(trx.address)}</span></div>` : ''}
-          ${!trx.isAsrama ? `<div class="receipt-row"><span class="k">Bayar</span><span>${paymentLabel(trx.payment)}</span></div>` : ''}
-          ${trx.catatan ? `<div class="receipt-row"><span class="k">Catatan</span><span>${escapeHtml(trx.catatan)}</span></div>` : ''}
-          ${totalLine}
-        </div>
-        <div class="receipt-foot">Dicatat oleh ${escapeHtml(trx.kasir || '-')}</div>
-      </div>
+      <div class="receipt-printable">${buildReceiptInnerHtml(trx)}</div>
       ${waActionHtml(trx)}
       <div style="margin-top:14px;">
         <button class="btn-secondary" id="btn-selesai-trx" style="width:100%;">Transaksi Selesai</button>
@@ -1684,6 +1718,37 @@
     });
   }
 
+  // ---------- KIRIM STRUK dari list Transaksi Hari Ini ----------
+  let listWaTrx = null;
+  function openListWaModal(trx){
+    listWaTrx = trx;
+    const cust = customers.find(c=>c.id===trx.customerId);
+    document.getElementById('list-wa-info').textContent = `${trx.customerName} · ${trx.jumlah} galon · ${trx.time}`;
+    document.getElementById('list-wa-phone').value = cust && cust.phone ? cust.phone : '';
+    const btn = document.getElementById('btn-list-wa-send');
+    btn.disabled = false;
+    btn.textContent = 'Kirim Struk (Foto) ke WA';
+    document.getElementById('modal-list-wa').classList.add('active');
+  }
+  document.getElementById('modal-list-wa-close').addEventListener('click', ()=>{
+    document.getElementById('modal-list-wa').classList.remove('active');
+  });
+  document.getElementById('btn-list-wa-send').addEventListener('click', async ()=>{
+    const phone = document.getElementById('list-wa-phone').value.trim();
+    if(!phone){ alert('Isi nomor WhatsApp dulu ya.'); return; }
+    const trx = listWaTrx;
+    if(!trx) return;
+    const cust = customers.find(c=>c.id===trx.customerId);
+    if(cust && cust.phone !== phone){ cust.phone = phone; await saveCustomers(); renderCustomerList(); }
+
+    const btn = document.getElementById('btn-list-wa-send');
+    const waWindow = window.open('', '_blank'); // buka duluan pas diklik biar ga keblokir
+    btn.disabled = true;
+    btn.textContent = 'Menyiapkan gambar struk...';
+    await sendReceiptImage(trx, phone, waWindow);
+    document.getElementById('modal-list-wa').classList.remove('active');
+  });
+
   function renderTodayList(){
     const list = transactions.filter(t=>t.date===todayStr());
     const wrap = document.getElementById('today-items');
@@ -1700,10 +1765,17 @@
         </div>
         <div style="display:flex;align-items:center;">
           <span class="amt">${t.isAsrama ? 'Internal' : fmt(t.total)}</span>
+          ${!t.isAsrama ? `<button class="print-btn" data-id="${t.id}" title="Kirim Struk">Kirim Struk</button>` : ''}
           <button class="del" data-id="${t.id}" title="Hapus">Hapus</button>
         </div>
       </div>
     `).join('');
+    wrap.querySelectorAll('.print-btn').forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        const trx = transactions.find(t=>t.id===btn.dataset.id);
+        if(trx) openListWaModal(trx);
+      });
+    });
     wrap.querySelectorAll('.del').forEach(btn=>{
       btn.addEventListener('click', ()=>{
         const id = btn.dataset.id;
