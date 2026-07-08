@@ -318,38 +318,39 @@
   .receipt-printable{
     background:#fff;
     width:4in;
-    min-height:6in;
-    padding:0.45in 0.4in;
+    height:6in;
+    padding:0.5in 0.42in;
     box-sizing:border-box;
     margin:0 auto;
     display:flex;
     flex-direction:column;
     justify-content:center;
+    overflow:hidden;
   }
   .receipt-head{
     text-align:center;
-    padding-bottom:22px;
-    border-bottom:1px dashed var(--paper-line);
+    padding-bottom:26px;
+    border-bottom:1.5px dashed var(--paper-line);
   }
   .receipt-head .name{
     font-family:'Space Grotesk',sans-serif;
     font-weight:700;
-    font-size:19px;
+    font-size:26px;
     color:var(--teal-950);
     letter-spacing:0.02em;
   }
   .receipt-head .sub{
-    font-size:11.5px;
+    font-size:14px;
     color:var(--ink-soft);
-    margin-top:4px;
+    margin-top:6px;
     line-height:1.6;
   }
-  .receipt-body{padding-top:22px;}
+  .receipt-body{padding-top:26px;}
   .receipt-row{
     display:flex;
     justify-content:space-between;
-    font-size:13.5px;
-    margin-bottom:15px;
+    font-size:16.5px;
+    margin-bottom:17px;
     color:var(--ink);
     gap:14px;
   }
@@ -358,10 +359,10 @@
   .receipt-total{
     display:flex;
     justify-content:space-between;
-    margin-top:20px;
-    padding-top:20px;
-    border-top:1px dashed var(--paper-line);
-    font-size:17px;
+    margin-top:22px;
+    padding-top:22px;
+    border-top:1.5px dashed var(--paper-line);
+    font-size:21px;
     font-weight:600;
     color:var(--teal-800);
   }
@@ -369,7 +370,7 @@
     margin-top:20px;
     padding-top:16px;
     border-top:1px dashed var(--paper-line);
-    font-size:11px;
+    font-size:13px;
     color:var(--ink-soft);
     text-align:center;
   }
@@ -419,6 +420,11 @@
     font-size:11px; margin-left:10px; opacity:0.75; white-space:nowrap;
   }
   .trx-item .print-btn:hover{opacity:1;}
+  .edit-trx-btn{
+    background:none; border:none; color:var(--teal-600); cursor:pointer;
+    font-size:12px; margin-right:6px;
+  }
+  .edit-trx-btn:hover{opacity:1;}
   .badge-antar{
     display:inline-block;
     background:var(--orange-soft);
@@ -1061,9 +1067,57 @@
     <button class="close-x" id="modal-list-wa-close">✕</button>
     <h3>Kirim Struk</h3>
     <div style="font-size:12px;color:var(--ink-soft);margin-bottom:14px;" id="list-wa-info"></div>
-    <label style="margin-top:0;">No. WhatsApp tujuan</label>
-    <input type="text" inputmode="numeric" autocomplete="off" id="list-wa-phone" placeholder="misal 08123456789"/>
-    <button class="btn-wa" id="btn-list-wa-send" style="width:100%;margin-top:14px;">Kirim Struk (Foto) ke WA</button>
+    <div id="list-wa-content"></div>
+  </div>
+</div>
+
+<!-- Modal: edit transaksi (PIN protected) -->
+<div class="modal-backdrop" id="modal-edit-trx">
+  <div class="modal">
+    <button class="close-x" id="modal-edit-trx-close">✕</button>
+    <h3>Edit Transaksi</h3>
+
+    <label id="edit-trx-nama-label">Pelanggan</label>
+    <input type="text" id="edit-trx-nama"/>
+
+    <div class="row">
+      <div>
+        <label>Jumlah galon</label>
+        <input type="number" id="edit-trx-jumlah" min="1"/>
+      </div>
+      <div>
+        <label>Tipe galon</label>
+        <select id="edit-trx-ukuran">
+          <option value="besar">Besar (galon biasa)</option>
+          <option value="kecil">Kecil</option>
+        </select>
+      </div>
+    </div>
+
+    <div id="edit-trx-pelanggan-fields">
+      <label>Pengambilan</label>
+      <div class="toggle-group">
+        <button type="button" class="toggle-btn" data-val="ambil" id="edit-btn-ambil">Ambil sendiri</button>
+        <button type="button" class="toggle-btn" data-val="antar" id="edit-btn-antar">Diantar</button>
+      </div>
+
+      <div id="edit-trx-alamat-wrap" style="display:none;">
+        <label>Alamat</label>
+        <input type="text" id="edit-trx-alamat"/>
+      </div>
+
+      <label>Metode pembayaran</label>
+      <div class="toggle-group">
+        <button type="button" class="toggle-btn" data-val="tunai" id="edit-btn-tunai">Tunai</button>
+        <button type="button" class="toggle-btn" data-val="qris" id="edit-btn-qris">QRIS</button>
+        <button type="button" class="toggle-btn" data-val="transfer" id="edit-btn-transfer">Transfer</button>
+      </div>
+    </div>
+
+    <label>Catatan</label>
+    <input type="text" id="edit-trx-catatan"/>
+
+    <button class="btn-primary" id="btn-save-edit-trx">Simpan Perubahan</button>
   </div>
 </div>
 
@@ -1642,18 +1696,60 @@
 
   function waActionHtml(trx){
     if(trx.isAsrama) return '';
+    return `<div class="wa-action" id="wa-action-box"></div>`;
+  }
+
+  function renderWaChoice(trx){
+    const box = document.getElementById('wa-action-box');
+    if(!box) return;
+    box.innerHTML = `
+      <div class="toggle-group">
+        <button type="button" class="toggle-btn" id="btn-choice-wa">Kirim ke WA</button>
+        <button type="button" class="toggle-btn" id="btn-choice-save">Simpan Gambar</button>
+      </div>
+    `;
+    document.getElementById('btn-choice-wa').addEventListener('click', ()=>renderWaSendForm(trx));
+    document.getElementById('btn-choice-save').addEventListener('click', ()=>handleSaveImageOnly(trx));
+  }
+
+  function renderWaSendForm(trx){
+    const box = document.getElementById('wa-action-box');
+    if(!box) return;
     const cust = customers.find(c=>c.id===trx.customerId);
     const savedPhone = cust && cust.phone ? cust.phone : '';
-    return `
-      <div class="wa-action">
-        <label style="margin-top:0;">No. WhatsApp tujuan</label>
-        <input type="text" inputmode="numeric" autocomplete="off" id="wa-phone-input" placeholder="misal 08123456789" value="${escapeHtml(savedPhone)}"/>
-        <button class="btn-wa" id="btn-wa-send">Kirim Struk (Foto) ke WA</button>
-      </div>`;
+    box.innerHTML = `
+      <label style="margin-top:0;">No. WhatsApp tujuan</label>
+      <input type="text" inputmode="numeric" autocomplete="off" id="wa-phone-input" placeholder="misal 08123456789" value="${escapeHtml(savedPhone)}"/>
+      <button class="btn-wa" id="btn-wa-send">Kirim Struk (Foto) ke WA</button>
+      <button class="btn-secondary" id="btn-wa-back" style="width:100%;">← Kembali</button>
+    `;
+    document.getElementById('btn-wa-back').addEventListener('click', ()=>renderWaChoice(trx));
+    attachWaHandler(trx);
+  }
+
+  async function handleSaveImageOnly(trx){
+    const box = document.getElementById('wa-action-box');
+    if(!box) return;
+    box.innerHTML = `<div style="text-align:center;color:var(--ink-soft);font-size:12.5px;padding:8px 0;">Menyiapkan gambar struk...</div>`;
+    const canvas = await generateReceiptImage(trx);
+    if(!canvas){ renderWaChoice(trx); return; }
+    canvas.toBlob(blob=>{
+      if(!blob){ alert('Gagal bikin gambar struk. Coba lagi.'); renderWaChoice(trx); return; }
+      const fileName = receiptFileName(trx);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = fileName; a.click();
+      URL.revokeObjectURL(url);
+      box.innerHTML = `
+        <div style="text-align:center;color:var(--wa);font-weight:600;font-size:13px;padding:4px 0;">✓ Gambar struk kesimpen ke Download</div>
+        <button class="btn-secondary" id="btn-save-again" style="width:100%;">Simpan lagi</button>
+      `;
+      document.getElementById('btn-save-again').addEventListener('click', ()=>handleSaveImageOnly(trx));
+    }, 'image/png');
   }
 
   function showWaSentConfirmation(trx, phone){
-    const waAction = document.querySelector('.wa-action');
+    const waAction = document.getElementById('wa-action-box');
     if(!waAction) return;
     waAction.innerHTML = `
       <div style="text-align:center;color:var(--wa);font-weight:600;font-size:13px;padding:4px 0;">
@@ -1701,7 +1797,7 @@
         <button class="btn-secondary" id="btn-selesai-trx" style="width:100%;">Transaksi Selesai</button>
       </div>
     `;
-    attachWaHandler(trx);
+    if(!trx.isAsrama) renderWaChoice(trx);
     attachSelesaiHandler();
   }
 
@@ -1722,32 +1818,71 @@
   let listWaTrx = null;
   function openListWaModal(trx){
     listWaTrx = trx;
-    const cust = customers.find(c=>c.id===trx.customerId);
     document.getElementById('list-wa-info').textContent = `${trx.customerName} · ${trx.jumlah} galon · ${trx.time}`;
-    document.getElementById('list-wa-phone').value = cust && cust.phone ? cust.phone : '';
-    const btn = document.getElementById('btn-list-wa-send');
-    btn.disabled = false;
-    btn.textContent = 'Kirim Struk (Foto) ke WA';
     document.getElementById('modal-list-wa').classList.add('active');
+    renderListWaChoice(trx);
   }
   document.getElementById('modal-list-wa-close').addEventListener('click', ()=>{
     document.getElementById('modal-list-wa').classList.remove('active');
   });
-  document.getElementById('btn-list-wa-send').addEventListener('click', async ()=>{
-    const phone = document.getElementById('list-wa-phone').value.trim();
-    if(!phone){ alert('Isi nomor WhatsApp dulu ya.'); return; }
-    const trx = listWaTrx;
-    if(!trx) return;
-    const cust = customers.find(c=>c.id===trx.customerId);
-    if(cust && cust.phone !== phone){ cust.phone = phone; await saveCustomers(); renderCustomerList(); }
 
-    const btn = document.getElementById('btn-list-wa-send');
-    const waWindow = window.open('', '_blank'); // buka duluan pas diklik biar ga keblokir
-    btn.disabled = true;
-    btn.textContent = 'Menyiapkan gambar struk...';
-    await sendReceiptImage(trx, phone, waWindow);
-    document.getElementById('modal-list-wa').classList.remove('active');
-  });
+  function renderListWaChoice(trx){
+    const content = document.getElementById('list-wa-content');
+    content.innerHTML = `
+      <div class="toggle-group">
+        <button type="button" class="toggle-btn" id="btn-list-choice-wa">Kirim ke WA</button>
+        <button type="button" class="toggle-btn" id="btn-list-choice-save">Simpan Gambar</button>
+      </div>
+    `;
+    document.getElementById('btn-list-choice-wa').addEventListener('click', ()=>renderListWaSendForm(trx));
+    document.getElementById('btn-list-choice-save').addEventListener('click', ()=>handleListSaveImageOnly(trx));
+  }
+
+  function renderListWaSendForm(trx){
+    const content = document.getElementById('list-wa-content');
+    const cust = customers.find(c=>c.id===trx.customerId);
+    content.innerHTML = `
+      <label style="margin-top:0;">No. WhatsApp tujuan</label>
+      <input type="text" inputmode="numeric" autocomplete="off" id="list-wa-phone" placeholder="misal 08123456789" value="${escapeHtml(cust && cust.phone ? cust.phone : '')}"/>
+      <button class="btn-wa" id="btn-list-wa-send" style="width:100%;margin-top:14px;">Kirim Struk (Foto) ke WA</button>
+      <button class="btn-secondary" id="btn-list-wa-back" style="width:100%;">← Kembali</button>
+    `;
+    document.getElementById('btn-list-wa-back').addEventListener('click', ()=>renderListWaChoice(trx));
+    document.getElementById('btn-list-wa-send').addEventListener('click', async ()=>{
+      const phone = document.getElementById('list-wa-phone').value.trim();
+      if(!phone){ alert('Isi nomor WhatsApp dulu ya.'); return; }
+      if(cust && cust.phone !== phone){ cust.phone = phone; await saveCustomers(); renderCustomerList(); }
+
+      const btn = document.getElementById('btn-list-wa-send');
+      const waWindow = window.open('', '_blank'); // buka duluan pas diklik biar ga keblokir
+      btn.disabled = true;
+      btn.textContent = 'Menyiapkan gambar struk...';
+      await sendReceiptImage(trx, phone, waWindow);
+      document.getElementById('modal-list-wa').classList.remove('active');
+    });
+  }
+
+  async function handleListSaveImageOnly(trx){
+    const content = document.getElementById('list-wa-content');
+    content.innerHTML = `<div style="text-align:center;color:var(--ink-soft);font-size:12.5px;padding:8px 0;">Menyiapkan gambar struk...</div>`;
+    const canvas = await generateReceiptImage(trx);
+    if(!canvas){ renderListWaChoice(trx); return; }
+    canvas.toBlob(blob=>{
+      if(!blob){ alert('Gagal bikin gambar struk. Coba lagi.'); renderListWaChoice(trx); return; }
+      const fileName = receiptFileName(trx);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = fileName; a.click();
+      URL.revokeObjectURL(url);
+      content.innerHTML = `
+        <div style="text-align:center;color:var(--wa);font-weight:600;font-size:13px;padding:4px 0;">✓ Gambar struk kesimpen ke Download</div>
+        <button class="btn-secondary" id="btn-list-save-again" style="width:100%;">Tutup</button>
+      `;
+      document.getElementById('btn-list-save-again').addEventListener('click', ()=>{
+        document.getElementById('modal-list-wa').classList.remove('active');
+      });
+    }, 'image/png');
+  }
 
   function renderTodayList(){
     const list = transactions.filter(t=>t.date===todayStr());
@@ -2419,6 +2554,93 @@
     `;
   }
 
+  // ---------- EDIT TRANSAKSI ----------
+  let editingTrxId = null;
+  let editPengambilanVal = 'ambil';
+  let editBayarVal = 'tunai';
+
+  const editBtnAmbil = document.getElementById('edit-btn-ambil');
+  const editBtnAntar = document.getElementById('edit-btn-antar');
+  const editAlamatWrap = document.getElementById('edit-trx-alamat-wrap');
+  const editBtnTunai = document.getElementById('edit-btn-tunai');
+  const editBtnQris = document.getElementById('edit-btn-qris');
+  const editBtnTransfer = document.getElementById('edit-btn-transfer');
+
+  function setEditPengambilan(mode){
+    editPengambilanVal = mode;
+    editBtnAmbil.classList.toggle('selected', mode==='ambil');
+    editBtnAntar.classList.toggle('selected', mode==='antar');
+    editAlamatWrap.style.display = mode==='antar' ? 'block' : 'none';
+  }
+  editBtnAmbil.addEventListener('click', ()=>setEditPengambilan('ambil'));
+  editBtnAntar.addEventListener('click', ()=>setEditPengambilan('antar'));
+
+  function setEditBayar(mode){
+    editBayarVal = mode;
+    editBtnTunai.classList.toggle('selected', mode==='tunai');
+    editBtnQris.classList.toggle('selected', mode==='qris');
+    editBtnTransfer.classList.toggle('selected', mode==='transfer');
+  }
+  editBtnTunai.addEventListener('click', ()=>setEditBayar('tunai'));
+  editBtnQris.addEventListener('click', ()=>setEditBayar('qris'));
+  editBtnTransfer.addEventListener('click', ()=>setEditBayar('transfer'));
+
+  function openEditTrxModal(trx){
+    editingTrxId = trx.id;
+    document.getElementById('edit-trx-nama-label').textContent = trx.isAsrama ? 'Asrama' : 'Pelanggan';
+    document.getElementById('edit-trx-nama').value = trx.customerName;
+    document.getElementById('edit-trx-jumlah').value = trx.jumlah;
+    document.getElementById('edit-trx-ukuran').value = trx.ukuran || 'besar';
+    document.getElementById('edit-trx-catatan').value = trx.catatan || '';
+
+    const pelangganFields = document.getElementById('edit-trx-pelanggan-fields');
+    if(trx.isAsrama){
+      pelangganFields.style.display = 'none';
+    } else {
+      pelangganFields.style.display = 'block';
+      document.getElementById('edit-trx-alamat').value = trx.address || '';
+      setEditPengambilan(trx.antar ? 'antar' : 'ambil');
+      setEditBayar(trx.payment || 'tunai');
+    }
+    document.getElementById('modal-edit-trx').classList.add('active');
+  }
+  document.getElementById('modal-edit-trx-close').addEventListener('click', ()=>{
+    document.getElementById('modal-edit-trx').classList.remove('active');
+  });
+  document.getElementById('btn-save-edit-trx').addEventListener('click', async ()=>{
+    const trx = transactions.find(t=>t.id===editingTrxId);
+    if(!trx) return;
+    const nama = document.getElementById('edit-trx-nama').value.trim();
+    if(!nama){ alert('Nama nggak boleh kosong.'); return; }
+    const jumlah = Math.max(1, parseInt(document.getElementById('edit-trx-jumlah').value)||1);
+    const ukuran = document.getElementById('edit-trx-ukuran').value;
+    const catatan = document.getElementById('edit-trx-catatan').value.trim();
+
+    trx.customerName = nama;
+    trx.jumlah = jumlah;
+    trx.ukuran = ukuran;
+    trx.catatan = catatan;
+
+    if(!trx.isAsrama){
+      trx.antar = editPengambilanVal === 'antar';
+      const alamat = document.getElementById('edit-trx-alamat').value.trim();
+      trx.address = trx.antar ? alamat : (trx.address || '');
+      trx.payment = editBayarVal;
+      trx.total = jumlah * getHarga(ukuran, trx.antar ? 'antar' : 'ambil');
+
+      // kalau namanya cocok sama pelanggan lain yang udah ada, nyambungin ke situ; kalau nggak, bikin/update baru
+      const cust = findOrCreateCustomer(nama, trx.address);
+      trx.customerId = cust.id;
+      await saveCustomers();
+      populateDatalist();
+    }
+
+    await saveTransactions();
+    renderReport();
+    renderTodayList();
+    document.getElementById('modal-edit-trx').classList.remove('active');
+  });
+
   function renderReport(){
     const filterDate = document.getElementById('filter-date').value.trim();
     const today = todayStr();
@@ -2457,9 +2679,21 @@
         <td>${t.isAsrama ? 'Asrama' : 'Jual'}</td>
         <td>${escapeHtml(t.kasir||'-')}</td>
         <td class="num">${t.isAsrama ? 'Internal' : fmt(t.total)}</td>
-        <td><button class="del" data-id="${t.id}" style="opacity:0.6;">Hapus</button></td>
+        <td>
+          <button class="edit-trx-btn" data-id="${t.id}" style="opacity:0.75;">Edit</button>
+          <button class="del" data-id="${t.id}" style="opacity:0.6;">Hapus</button>
+        </td>
       </tr>
     `).join('');
+    tbody.querySelectorAll('.edit-trx-btn').forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        const id = btn.dataset.id;
+        requestPin(()=>{
+          const trx = transactions.find(t=>t.id===id);
+          if(trx) openEditTrxModal(trx);
+        });
+      });
+    });
     tbody.querySelectorAll('.del').forEach(btn=>{
       btn.addEventListener('click', ()=>{
         const id = btn.dataset.id;
