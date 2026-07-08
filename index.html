@@ -1015,6 +1015,35 @@
   </div>
 </div>
 
+<!-- Modal: tanda tangan sebelum export Laporan Harian -->
+<div class="modal-backdrop" id="modal-ttd">
+  <div class="modal">
+    <button class="close-x" id="modal-ttd-close">✕</button>
+
+    <div id="ttd-step-name">
+      <h3>Siapa yang tanda tangan?</h3>
+      <div style="font-size:12px;color:var(--ink-soft);margin-bottom:14px;">Laporan harian ini perlu disetujui sebelum di-export.</div>
+      <div class="toggle-group" id="ttd-quick-picks">
+        <button type="button" class="toggle-btn" data-name="Hera">Hera</button>
+        <button type="button" class="toggle-btn" data-name="Ilyas">Ilyas</button>
+      </div>
+      <label>Atau nama lain</label>
+      <input type="text" id="f-ttd-nama" placeholder="Ketik nama"/>
+      <button class="btn-primary" id="btn-ttd-lanjut">Lanjut ke Tanda Tangan</button>
+    </div>
+
+    <div id="ttd-step-sign" style="display:none;">
+      <h3>Tanda Tangan</h3>
+      <div style="font-size:12px;color:var(--ink-soft);margin-bottom:10px;">Gores jari di kotak putih di bawah ini.</div>
+      <canvas id="ttd-canvas" style="width:100%;height:180px;border:1.5px solid var(--paper-line);border-radius:9px;background:#fff;touch-action:none;display:block;"></canvas>
+      <div style="display:flex;gap:8px;margin-top:12px;">
+        <button class="btn-secondary" id="btn-ttd-clear" style="flex:1;">Bersihkan</button>
+        <button class="btn-primary" id="btn-ttd-confirm" style="flex:1;margin-top:0;">Konfirmasi &amp; Export</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script>
@@ -2382,7 +2411,83 @@
     return days[d.getDay()];
   }
 
-  async function exportDailyReportImage(){
+  // ---------- TANDA TANGAN (sebelum export Laporan Harian) ----------
+  let ttdName = '';
+  let ttdCanvas, ttdCtx, ttdDrawing = false, ttdHasDrawn = false;
+
+  function openTtdModal(){
+    document.getElementById('ttd-step-name').style.display = 'block';
+    document.getElementById('ttd-step-sign').style.display = 'none';
+    document.getElementById('f-ttd-nama').value = '';
+    document.querySelectorAll('#ttd-quick-picks .toggle-btn').forEach(b=>b.classList.remove('selected'));
+    document.getElementById('modal-ttd').classList.add('active');
+  }
+  document.getElementById('modal-ttd-close').addEventListener('click', ()=>{
+    document.getElementById('modal-ttd').classList.remove('active');
+  });
+  document.querySelectorAll('#ttd-quick-picks .toggle-btn').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      document.querySelectorAll('#ttd-quick-picks .toggle-btn').forEach(b=>b.classList.remove('selected'));
+      btn.classList.add('selected');
+      document.getElementById('f-ttd-nama').value = btn.dataset.name;
+    });
+  });
+
+  function resizeSignatureCanvas(){
+    const rect = ttdCanvas.getBoundingClientRect();
+    ttdCanvas.width = rect.width * 2;
+    ttdCanvas.height = rect.height * 2;
+    ttdCtx.scale(2,2);
+    ttdCtx.lineWidth = 2.2;
+    ttdCtx.lineCap = 'round';
+    ttdCtx.lineJoin = 'round';
+    ttdCtx.strokeStyle = '#0a2e33';
+  }
+  function clearSignatureCanvas(){
+    resizeSignatureCanvas(); // set ukuran ulang sekalian bersihin isinya
+    ttdHasDrawn = false;
+  }
+  function setupSignaturePad(){
+    ttdCanvas = document.getElementById('ttd-canvas');
+    ttdCtx = ttdCanvas.getContext('2d');
+    function getPos(e){
+      const rect = ttdCanvas.getBoundingClientRect();
+      return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+    }
+    ttdCanvas.addEventListener('pointerdown', (e)=>{
+      ttdDrawing = true; ttdHasDrawn = true;
+      const p = getPos(e);
+      ttdCtx.beginPath(); ttdCtx.moveTo(p.x, p.y);
+      e.preventDefault();
+    });
+    ttdCanvas.addEventListener('pointermove', (e)=>{
+      if(!ttdDrawing) return;
+      const p = getPos(e);
+      ttdCtx.lineTo(p.x, p.y); ttdCtx.stroke();
+      e.preventDefault();
+    });
+    window.addEventListener('pointerup', ()=>{ ttdDrawing = false; });
+  }
+  setupSignaturePad();
+
+  document.getElementById('btn-ttd-lanjut').addEventListener('click', ()=>{
+    const name = document.getElementById('f-ttd-nama').value.trim();
+    if(!name){ alert('Pilih atau ketik nama dulu ya.'); return; }
+    ttdName = name;
+    document.getElementById('ttd-step-name').style.display = 'none';
+    document.getElementById('ttd-step-sign').style.display = 'block';
+    clearSignatureCanvas();
+  });
+  document.getElementById('btn-ttd-clear').addEventListener('click', clearSignatureCanvas);
+  document.getElementById('btn-ttd-confirm').addEventListener('click', ()=>{
+    if(!ttdHasDrawn){ alert('Tanda tangan dulu ya di kotaknya.'); return; }
+    const signatureDataUrl = ttdCanvas.toDataURL('image/png');
+    const signedAt = getNow();
+    document.getElementById('modal-ttd').classList.remove('active');
+    exportDailyReportImage({ name: ttdName, dataUrl: signatureDataUrl, signedAt });
+  });
+
+  async function exportDailyReportImage(signature){
     if(typeof html2canvas === 'undefined'){
       alert('Modul gambar belum siap dimuat. Pastikan ada koneksi internet sebentar, lalu coba lagi.');
       return;
@@ -2499,6 +2604,18 @@
 
         <div style="text-align:right;font-size:17px;font-weight:700;color:#0a2e33;margin-top:22px;padding-top:16px;border-top:2px dashed #5c6e6f;">Saldo Bersih: ${fmt(totalPemasukan - totalPengeluaran)}</div>
 
+        ${signature ? `
+        <div style="margin-top:26px;display:flex;justify-content:flex-end;">
+          <div style="text-align:center;">
+            <div style="font-size:11px;color:#5c6e6f;margin-bottom:4px;">Mengetahui,</div>
+            <img src="${signature.dataUrl}" style="width:160px;height:70px;object-fit:contain;"/>
+            <div style="border-top:1px solid #0a2e33;width:160px;margin:2px auto 4px;"></div>
+            <div style="font-size:12px;font-weight:600;color:#0a2e33;">${escapeHtml(signature.name)}</div>
+            <div style="font-size:10px;color:#5c6e6f;">${signature.signedAt.toLocaleDateString('id-ID')}, ${signature.signedAt.toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'})}</div>
+          </div>
+        </div>
+        ` : ''}
+
         <div style="text-align:center;font-size:10px;color:#5c6e6f;margin-top:26px;">Dibuat otomatis oleh sistem kasir Aquaners</div>
       </div>
     `;
@@ -2521,7 +2638,7 @@
       document.body.removeChild(temp);
     }
   }
-  document.getElementById('btn-export-daily').addEventListener('click', exportDailyReportImage);
+  document.getElementById('btn-export-daily').addEventListener('click', openTtdModal);
 
   document.getElementById('btn-export').addEventListener('click', ()=>{
     if(transactions.length===0){ alert('Belum ada data untuk diexport.'); return; }
