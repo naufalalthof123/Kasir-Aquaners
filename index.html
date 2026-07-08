@@ -2814,6 +2814,9 @@
     const totalPemasukan = jual.reduce((s,t)=>s+t.total,0);
     const totalPengeluaran = dayExpenses.reduce((s,e)=>s+e.jumlahBiaya,0);
     const totalAsramaGalon = asrama.reduce((s,t)=>s+t.jumlah,0);
+    const totalTunai = jual.filter(t=>t.payment==='tunai').reduce((s,t)=>s+t.total,0);
+    const totalQris = jual.filter(t=>t.payment==='qris').reduce((s,t)=>s+t.total,0);
+    const totalTransfer = jual.filter(t=>t.payment==='transfer').reduce((s,t)=>s+t.total,0);
 
     const pemasukanRows = jual.map(t=>`
       <tr>
@@ -2888,7 +2891,12 @@
             ${pemasukanRows || '<tr><td colspan="7" style="padding:14px;text-align:center;color:#5c6e6f;">Tidak ada transaksi jual di tanggal ini</td></tr>'}
           </tbody>
         </table>
-        <div style="text-align:right;font-size:14px;font-weight:700;color:#0f5763;margin-top:10px;padding-top:10px;border-top:2px solid #0f5763;">Jumlah Pemasukan: ${fmt(totalPemasukan)}</div>
+        <div style="display:flex;justify-content:flex-end;gap:22px;margin-top:14px;font-size:12.5px;color:#5c6e6f;">
+          <span>Tunai: <strong style="color:#0a2e33;">${fmt(totalTunai)}</strong></span>
+          <span>QRIS: <strong style="color:#0a2e33;">${fmt(totalQris)}</strong></span>
+          <span>Transfer: <strong style="color:#0a2e33;">${fmt(totalTransfer)}</strong></span>
+        </div>
+        <div style="text-align:right;font-size:14px;font-weight:700;color:#0f5763;margin-top:8px;padding-top:10px;border-top:2px solid #0f5763;">Jumlah Pemasukan: ${fmt(totalPemasukan)}</div>
 
         ${asramaSection}
 
