@@ -1123,6 +1123,7 @@
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script>
 (function(){
   const PRICE_MATRIX = {
@@ -2817,6 +2818,8 @@
     const totalTunai = jual.filter(t=>t.payment==='tunai').reduce((s,t)=>s+t.total,0);
     const totalQris = jual.filter(t=>t.payment==='qris').reduce((s,t)=>s+t.total,0);
     const totalTransfer = jual.filter(t=>t.payment==='transfer').reduce((s,t)=>s+t.total,0);
+    const totalGalonJual = jual.reduce((s,t)=>s+t.jumlah,0);
+    const jumlahPelangganUnik = new Set(jual.map(t=>t.customerId || t.customerName)).size;
 
     const pemasukanRows = jual.map(t=>`
       <tr>
@@ -2892,6 +2895,10 @@
           </tbody>
         </table>
         <div style="display:flex;justify-content:flex-end;gap:22px;margin-top:14px;font-size:12.5px;color:#5c6e6f;">
+          <span>Jumlah Galon: <strong style="color:#0a2e33;">${totalGalonJual}</strong></span>
+          <span>Jumlah Pelanggan: <strong style="color:#0a2e33;">${jumlahPelangganUnik}</strong></span>
+        </div>
+        <div style="display:flex;justify-content:flex-end;gap:22px;margin-top:8px;font-size:12.5px;color:#5c6e6f;">
           <span>Tunai: <strong style="color:#0a2e33;">${fmt(totalTunai)}</strong></span>
           <span>QRIS: <strong style="color:#0a2e33;">${fmt(totalQris)}</strong></span>
           <span>Transfer: <strong style="color:#0a2e33;">${fmt(totalTransfer)}</strong></span>
@@ -2938,16 +2945,35 @@
     try{
       const node = document.getElementById('daily-report-export');
       const canvas = await html2canvas(node, {backgroundColor:'#faf7f0', scale:2});
-      canvas.toBlob(blob=>{
-        if(!blob){ alert('Gagal bikin gambar laporan. Coba lagi.'); return; }
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url; a.download = `aquaners-laporan-harian-${targetDate}.png`; a.click();
-        URL.revokeObjectURL(url);
-      }, 'image/png');
+
+      if(typeof window.jspdf === 'undefined'){
+        // fallback ke PNG kalau modul PDF-nya gagal dimuat
+        canvas.toBlob(blob=>{
+          if(!blob){ alert('Gagal bikin laporan. Coba lagi.'); return; }
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url; a.download = `aquaners-laporan-harian-${targetDate}.png`; a.click();
+          URL.revokeObjectURL(url);
+          alert('Modul PDF belum siap dimuat, jadi laporan disimpan sebagai gambar biasa. Pastikan internet aktif lalu coba export lagi buat dapetin versi PDF.');
+        }, 'image/png');
+        return;
+      }
+
+      const imgData = canvas.toDataURL('image/png');
+      const pxToMm = px => px * 25.4 / 192; // scale:2 saat capture ~ 192 "dpi" efektif
+      const pdfWidth = pxToMm(canvas.width);
+      const pdfHeight = pxToMm(canvas.height);
+      const { jsPDF } = window.jspdf;
+      const pdf = new jsPDF({
+        orientation: pdfWidth > pdfHeight ? 'landscape' : 'portrait',
+        unit: 'mm',
+        format: [pdfWidth, pdfHeight]
+      });
+      pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+      pdf.save(`aquaners-laporan-harian-${targetDate}.pdf`);
     }catch(e){
       console.error('gagal export laporan harian', e);
-      alert('Gagal bikin gambar laporan. Coba lagi.');
+      alert('Gagal bikin laporan. Coba lagi.');
     }finally{
       document.body.removeChild(temp);
     }
