@@ -1649,6 +1649,53 @@
     `;
   }
 
+  // ---------- CETAK THERMAL (cuma jalan di APK, butuh printer Bluetooth kepasang) ----------
+  function isNativeApp(){
+    return !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
+  }
+
+  function buildThermalReceiptText(trx){
+    const hargaSatuan = getHarga(trx.ukuran, trx.antar ? 'antar' : 'ambil');
+    const ukuranLabel = trx.ukuran === 'kecil' ? 'Kecil' : 'Besar';
+    const lines = [];
+    lines.push('[C]<b>' + BIZ_NAME + '</b>');
+    lines.push('[C]Refill Mineral Water');
+    lines.push('[C]' + BIZ_ADDRESS);
+    lines.push('[C]--------------------------------');
+    lines.push('[L]Tanggal[R]' + trx.date + ' ' + trx.time);
+    lines.push('[L]' + (trx.isAsrama ? 'Asrama' : 'Pelanggan') + '[R]' + trx.customerName);
+    lines.push('[L]Galon (' + ukuranLabel + ')[R]' + (trx.isAsrama ? String(trx.jumlah) : trx.jumlah + ' x ' + fmt(hargaSatuan)));
+    if(!trx.isAsrama){
+      lines.push('[L]Pengambilan[R]' + (trx.antar ? 'Diantar' : 'Ambil sendiri'));
+      if(trx.address) lines.push('[L]Alamat[R]' + trx.address);
+      lines.push('[L]Bayar[R]' + paymentLabel(trx.payment));
+    }
+    if(trx.catatan) lines.push('[L]Catatan[R]' + trx.catatan);
+    lines.push('[C]--------------------------------');
+    lines.push(trx.isAsrama ? '[C]<b>INTERNAL - ASRAMA</b>' : '[R]<b>Total: ' + fmt(trx.total) + '</b>');
+    lines.push('[C]--------------------------------');
+    lines.push('[C]Dicatat oleh ' + (trx.kasir || '-'));
+    lines.push('[C]');
+    lines.push('[C]');
+    return lines.join('\n');
+  }
+
+  function printThermalReceipt(trx){
+    if(typeof window.ThermalPrinter === 'undefined'){
+      alert('Fitur cetak thermal cuma jalan di aplikasi APK (bukan versi browser).');
+      return;
+    }
+    const text = buildThermalReceiptText(trx);
+    window.ThermalPrinter.printFormattedText(
+      { type: 'bluetooth', id: 'first', text: text },
+      function(){ /* berhasil cetak */ },
+      function(err){
+        console.error('gagal cetak thermal', err);
+        alert('Gagal cetak. Pastikan printer thermal-nya nyala & udah di-pairing lewat Bluetooth tablet (Settings → Bluetooth).');
+      }
+    );
+  }
+
   async function generateReceiptImage(trx){
     if(typeof html2canvas === 'undefined'){
       alert('Modul gambar belum siap dimuat. Pastikan ada koneksi internet sebentar, lalu coba lagi.');
@@ -1713,14 +1760,19 @@
   function renderWaChoice(trx){
     const box = document.getElementById('wa-action-box');
     if(!box) return;
+    const thermalBtn = isNativeApp() ? `<button type="button" class="toggle-btn" id="btn-choice-thermal">Cetak Thermal</button>` : '';
     box.innerHTML = `
       <div class="toggle-group">
         <button type="button" class="toggle-btn" id="btn-choice-wa">Kirim ke WA</button>
         <button type="button" class="toggle-btn" id="btn-choice-save">Simpan Gambar</button>
+        ${thermalBtn}
       </div>
     `;
     document.getElementById('btn-choice-wa').addEventListener('click', ()=>renderWaSendForm(trx));
     document.getElementById('btn-choice-save').addEventListener('click', ()=>handleSaveImageOnly(trx));
+    if(isNativeApp()){
+      document.getElementById('btn-choice-thermal').addEventListener('click', ()=>printThermalReceipt(trx));
+    }
   }
 
   function renderWaSendForm(trx){
@@ -1839,14 +1891,22 @@
 
   function renderListWaChoice(trx){
     const content = document.getElementById('list-wa-content');
+    const thermalBtn = isNativeApp() ? `<button type="button" class="toggle-btn" id="btn-list-choice-thermal">Cetak Thermal</button>` : '';
     content.innerHTML = `
       <div class="toggle-group">
         <button type="button" class="toggle-btn" id="btn-list-choice-wa">Kirim ke WA</button>
         <button type="button" class="toggle-btn" id="btn-list-choice-save">Simpan Gambar</button>
+        ${thermalBtn}
       </div>
     `;
     document.getElementById('btn-list-choice-wa').addEventListener('click', ()=>renderListWaSendForm(trx));
     document.getElementById('btn-list-choice-save').addEventListener('click', ()=>handleListSaveImageOnly(trx));
+    if(isNativeApp()){
+      document.getElementById('btn-list-choice-thermal').addEventListener('click', ()=>{
+        printThermalReceipt(trx);
+        document.getElementById('modal-list-wa').classList.remove('active');
+      });
+    }
   }
 
   function renderListWaSendForm(trx){
