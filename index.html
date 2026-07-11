@@ -850,6 +850,16 @@
       </div>
     </div>
 
+    <div class="card" style="margin-bottom:18px;">
+      <h2><span class="eyebrow">BACKUP</span> Backup &amp; Pindah Data</h2>
+      <div style="font-size:12px;color:var(--ink-soft);margin-bottom:14px;">Backup semua data (transaksi, pelanggan, pengeluaran) jadi 1 file — bisa dipakai buat pindah ke device/versi lain (misal ke APK).</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <button class="btn-secondary" id="btn-export-backup" style="flex:1;min-width:160px;">Export Backup (.json)</button>
+        <button class="btn-secondary" id="btn-import-backup-trigger" style="flex:1;min-width:160px;">Import Backup (.json)</button>
+      </div>
+      <input type="file" id="f-import-backup" accept="application/json" style="display:none;"/>
+    </div>
+
     <div class="section-tag">Hari ini</div>
     <div class="stat-row two-col">
       <div class="stat-card">
@@ -2640,6 +2650,71 @@
     renderReport();
     renderTodayList();
     document.getElementById('modal-edit-trx').classList.remove('active');
+  });
+
+  // ---------- BACKUP & IMPORT DATA (buat pindah ke device/APK lain) ----------
+  document.getElementById('btn-export-backup').addEventListener('click', ()=>{
+    const backup = {
+      exportedAt: new Date().toISOString(),
+      app: 'aquaners-kasir',
+      customers,
+      transactions,
+      expenses
+    };
+    const blob = new Blob([JSON.stringify(backup, null, 2)], {type:'application/json'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = `aquaners-backup-${todayStr()}.json`; a.click();
+    URL.revokeObjectURL(url);
+  });
+
+  document.getElementById('btn-import-backup-trigger').addEventListener('click', ()=>{
+    document.getElementById('f-import-backup').click();
+  });
+  document.getElementById('f-import-backup').addEventListener('change', async (e)=>{
+    const file = e.target.files[0];
+    e.target.value = ''; // reset biar bisa pilih file yang sama lagi kalau perlu
+    if(!file) return;
+    try{
+      const text = await file.text();
+      const data = JSON.parse(text);
+      if(!Array.isArray(data.transactions) || !Array.isArray(data.customers)){
+        alert('File backup nggak valid. Pastikan file .json hasil export dari app ini.');
+        return;
+      }
+      const jumlahExp = Array.isArray(data.expenses) ? data.expenses.length : 0;
+      const msg = `Import data ini bakal DIGABUNG sama data yang udah ada sekarang (bukan nimpa).\n\nDari file backup:\n${data.transactions.length} transaksi\n${data.customers.length} pelanggan\n${jumlahExp} pengeluaran\n\nLanjut?`;
+      showConfirm(msg, async ()=>{
+        const existingTrxIds = new Set(transactions.map(t=>t.id));
+        let addedTrx = 0;
+        data.transactions.forEach(t=>{
+          if(!existingTrxIds.has(t.id)){ transactions.push(t); addedTrx++; }
+        });
+
+        const existingCustIds = new Set(customers.map(c=>c.id));
+        let addedCust = 0;
+        data.customers.forEach(c=>{
+          if(!existingCustIds.has(c.id)){ customers.push(c); addedCust++; }
+        });
+
+        let addedExp = 0;
+        if(Array.isArray(data.expenses)){
+          const existingExpIds = new Set(expenses.map(ex=>ex.id));
+          data.expenses.forEach(ex=>{
+            if(!existingExpIds.has(ex.id)){ expenses.push(ex); addedExp++; }
+          });
+        }
+
+        await saveTransactions();
+        await saveCustomers();
+        await saveExpenses();
+        renderAll();
+        alert(`Import selesai!\n${addedTrx} transaksi baru\n${addedCust} pelanggan baru\n${addedExp} pengeluaran baru\n\n(Data yang udah ada sebelumnya di device ini nggak berubah/nggak ke-duplikat.)`);
+      }, 'Import Data Backup');
+    }catch(err){
+      console.error('gagal import backup', err);
+      alert('Gagal baca file backup. Pastikan file-nya benar (.json hasil export dari app ini).');
+    }
   });
 
   function renderReport(){
